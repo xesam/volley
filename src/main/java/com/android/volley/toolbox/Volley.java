@@ -21,10 +21,8 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.net.http.AndroidHttpClient;
 import android.os.Build;
-
 import com.android.volley.Network;
 import com.android.volley.RequestQueue;
-
 import java.io.File;
 
 public class Volley {
@@ -52,13 +50,15 @@ public class Volley {
                 String userAgent = "volley/0";
                 try {
                     String packageName = context.getPackageName();
-                    PackageInfo info = context.getPackageManager().getPackageInfo(packageName, 0);
+                    PackageInfo info =
+                            context.getPackageManager().getPackageInfo(packageName, /* flags= */ 0);
                     userAgent = packageName + "/" + info.versionCode;
                 } catch (NameNotFoundException e) {
                 }
 
-                network = new BasicNetwork(
-                        new HttpClientStack(AndroidHttpClient.newInstance(userAgent)));
+                network =
+                        new BasicNetwork(
+                                new HttpClientStack(AndroidHttpClient.newInstance(userAgent)));
             }
         } else {
             network = new BasicNetwork(stack);
@@ -74,7 +74,7 @@ public class Volley {
      * @param stack An {@link HttpStack} to use for the network, or null for default.
      * @return A started {@link RequestQueue} instance.
      * @deprecated Use {@link #newRequestQueue(Context, BaseHttpStack)} instead to avoid depending
-     *             on Apache HTTP. This method may be removed in a future release of Volley.
+     *     on Apache HTTP. This method may be removed in a future release of Volley.
      */
     @Deprecated
     @SuppressWarnings("deprecation")
@@ -86,8 +86,22 @@ public class Volley {
     }
 
     private static RequestQueue newRequestQueue(Context context, Network network) {
-        File cacheDir = new File(context.getCacheDir(), DEFAULT_CACHE_DIR);
-        RequestQueue queue = new RequestQueue(new DiskBasedCache(cacheDir), network);
+        final Context appContext = context.getApplicationContext();
+        // Use a lazy supplier for the cache directory so that newRequestQueue() can be called on
+        // main thread without causing strict mode violation.
+        DiskBasedCache.FileSupplier cacheSupplier =
+                new DiskBasedCache.FileSupplier() {
+                    private File cacheDir = null;
+
+                    @Override
+                    public File get() {
+                        if (cacheDir == null) {
+                            cacheDir = new File(appContext.getCacheDir(), DEFAULT_CACHE_DIR);
+                        }
+                        return cacheDir;
+                    }
+                };
+        RequestQueue queue = new RequestQueue(new DiskBasedCache(cacheSupplier), network);
         queue.start();
         return queue;
     }
